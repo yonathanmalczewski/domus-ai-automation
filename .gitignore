@@ -1,0 +1,23 @@
+# Secretos y credenciales: nunca al repo
+.env
+.env.*
+*.pem
+*.key
+credentials*.json
+client_secret*.json
+
+# Datos locales de n8n (si alguna vez se monta una carpeta en vez de un volumen)
+.n8n/
+n8n_data/
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Videos pesados (el video demo está en Google Drive, enlazado en el README)
+*.mp4
+*.mov
+*.mkv

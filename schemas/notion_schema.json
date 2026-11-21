@@ -1,0 +1,76 @@
+{
+  "workspace": "Domus Propiedades",
+  "parent_page_id": "4124912dc9b6806197a8c21f4099bb28",
+  "relations": [
+    "Contactos 1─N Consultas",
+    "Consultas N─N Base de Conocimiento",
+    "Consultas 1─N Log de Ejecuciones"
+  ],
+  "databases": [
+    {
+      "name": "Contactos",
+      "database_id": "c5fdd9d354514d53acf8e5a5af000738",
+      "data_source_id": "d2c0c59a-c7f1-402a-a4c1-37a47c48dcb0",
+      "properties": [
+        { "name": "Nombre", "type": "title" },
+        { "name": "Email", "type": "email" },
+        { "name": "Tipo de contacto", "type": "select", "options": ["Interesado", "Inquilino", "Propietario", "Otro"] },
+        { "name": "Alta", "type": "created_time" },
+        { "name": "Consultas", "type": "relation", "relation_to": "Consultas", "synced_property": "Contacto" }
+      ]
+    },
+    {
+      "name": "Consultas",
+      "database_id": "02a9debef55e4201a3635dd5000d3be1",
+      "data_source_id": "7dfce926-90e9-44f1-bf30-3ca7996bcf13",
+      "properties": [
+        { "name": "Asunto", "type": "title" },
+        { "name": "Estado", "type": "select", "options": ["Pendiente", "Procesado por IA", "Aprobado por Humano", "Enviado", "Rechazado", "Derivado a humano", "Datos incompletos", "Error"] },
+        { "name": "Categoria", "type": "select", "options": ["Comercial", "Mantenimiento", "Administrativa", "Otro"] },
+        { "name": "Urgencia", "type": "select", "options": ["Alta", "Media", "Baja"] },
+        { "name": "Mensaje minimizado", "type": "rich_text" },
+        { "name": "Datos redactados", "type": "multi_select", "options": ["DNI", "CBU/CVU", "Telefono", "Email", "Tarjeta"] },
+        { "name": "Resumen IA", "type": "rich_text" },
+        { "name": "Borrador IA", "type": "rich_text" },
+        { "name": "Contacto", "type": "relation", "relation_to": "Contactos", "synced_property": "Consultas" },
+        { "name": "Articulos usados", "type": "relation", "relation_to": "Base de Conocimiento", "synced_property": "Usado en consultas" },
+        { "name": "Recibida", "type": "date" },
+        { "name": "Respondida", "type": "date" },
+        { "name": "Tiempo de respuesta (min)", "type": "formula", "formula": "dateBetween(prop(\"Respondida\"), prop(\"Recibida\"), \"minutes\")" },
+        { "name": "Tokens IA", "type": "number" },
+        { "name": "Modelo IA", "type": "rich_text" },
+        { "name": "ID ejecucion", "type": "rich_text" },
+        { "name": "Gmail Thread ID", "type": "rich_text" },
+        { "name": "Errores", "type": "relation", "relation_to": "Log de Ejecuciones", "synced_property": "Consulta" }
+      ]
+    },
+    {
+      "name": "Base de Conocimiento",
+      "database_id": "d163c668fc334eea9acf0ca3a1ab8e6f",
+      "data_source_id": "acdbac53-5bb6-48e8-bd3c-5a62d54d9c54",
+      "properties": [
+        { "name": "Tema", "type": "title" },
+        { "name": "Categoria", "type": "select", "options": ["Comercial", "Mantenimiento", "Administrativa", "Otro"] },
+        { "name": "Contenido", "type": "rich_text" },
+        { "name": "Verificado", "type": "checkbox" },
+        { "name": "Ultima revision", "type": "date" },
+        { "name": "Usado en consultas", "type": "relation", "relation_to": "Consultas", "synced_property": "Articulos usados" }
+      ]
+    },
+    {
+      "name": "Log de Ejecuciones",
+      "database_id": "b7127b507ece4132a551b5021affa6bb",
+      "data_source_id": "ad0f5333-803c-42c3-b8d6-62c1fb1475d2",
+      "properties": [
+        { "name": "Evento", "type": "title" },
+        { "name": "Tipo", "type": "select", "options": ["Error IA", "Error API", "Error envio", "Error no controlado", "Timeout HITL"] },
+        { "name": "Workflow", "type": "select", "options": ["WF01 Atencion", "WF99 Errores"] },
+        { "name": "Nodo", "type": "rich_text" },
+        { "name": "Detalle", "type": "rich_text" },
+        { "name": "ID ejecucion", "type": "rich_text" },
+        { "name": "Fecha", "type": "date" },
+        { "name": "Consulta", "type": "relation", "relation_to": "Consultas", "synced_property": "Errores" }
+      ]
+    }
+  ]
+}

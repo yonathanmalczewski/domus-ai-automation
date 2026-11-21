@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "domus-ai-automation/schemas/esquemas_transferencia.json",
+  "title": "Domus Propiedades · Esquemas JSON de transferencia entre componentes",
+  "description": "Contratos de datos entre el formulario, n8n, la IA, Notion, Slack y Gmail. Cada definición indica origen, destino y nodo de n8n que la produce o la consume. Los valores de ejemplo son ficticios.",
+  "$defs": {
+    "T1_formulario_a_n8n": {
+      "description": "Origen: formulario web (n8n Form Trigger, ruta /form/domus-consultas). Destino: nodo 'Datos · Minimizar y normalizar'.",
+      "type": "object",
+      "required": ["nombre", "email", "tipo_contacto"],
+      "properties": {
+        "nombre": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "tipo_contacto": { "enum": ["Interesado", "Inquilino", "Propietario", "Otro"] },
+        "mensaje": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "formMode": { "enum": ["production", "test"] }
+      }
+    },
+    "T2_consulta_minimizada": {
+      "description": "Objeto canónico interno que produce 'Datos · Minimizar y normalizar'. Es la única versión del mensaje que se guarda en Notion o llega a la IA.",
+      "type": "object",
+      "required": ["nombre", "email", "email_valido", "tipo_contacto", "mensaje_minimizado", "largo_mensaje", "datos_redactados", "es_remitente_interno", "recibida", "execution_id"],
+      "properties": {
+        "nombre": { "type": "string", "maxLength": 80 },
+        "email": { "type": "string", "description": "En minúsculas" },
+        "email_valido": { "type": "boolean" },
+        "tipo_contacto": { "enum": ["Interesado", "Inquilino", "Propietario", "Otro"] },
+        "mensaje_minimizado": { "type": "string", "maxLength": 1500, "description": "Mensaje con DNI, CBU/CVU, teléfonos, emails y tarjetas reemplazados por marcas como [TELEFONO REDACTADO]" },
+        "largo_mensaje": { "type": "integer", "minimum": 0 },
+        "datos_redactados": { "type": "array", "items": { "enum": ["DNI", "CBU/CVU", "Telefono", "Email", "Tarjeta"] }, "uniqueItems": true },
+        "es_remitente_interno": { "type": "boolean", "description": "true si el email coincide con Config.email_remitente_domus (filtro anti-bucle)" },
+        "recibida": { "type": "string", "format": "date-time" },
+        "execution_id": { "type": "string" }
+      }
+    },
+    "T3_clasificacion_ia": {
+      "description": "Salida JSON forzada (responseSchema) del nodo 'IA · Clasificar consulta (Gemini)', validada por 'IA · Validar clasificación'. La IA recibe solo tipo de remitente, cantidad de consultas previas y mensaje minimizado.",
+      "type": "object",
+      "required": ["categoria", "urgencia", "resumen", "intencion", "confianza"],
+      "properties": {
+        "categoria": { "enum": ["Comercial", "Mantenimiento", "Administrativa", "Otro"] },
+        "urgencia": { "enum": ["Alta", "Media", "Baja"] },
+        "resumen": { "type": "string", "maxLength": 500 },
+        "intencion": { "type": "string", "maxLength": 120 },
+        "confianza": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "T4_borrador_ia": {
+      "description": "Salida JSON forzada del nodo 'IA · Redactar respuesta (Gemini)'. 'IA · Validar borrador' le agrega semáforo, alertas, artículos citados, tokens y modelos.",
+      "type": "object",
+      "required": ["asunto", "cuerpo", "referencias", "confianza", "requiere_atencion_especial"],
+      "properties": {
+        "asunto": { "type": "string", "maxLength": 120 },
+        "cuerpo": { "type": "string", "minLength": 40, "maxLength": 1900 },
+        "referencias": { "type": "array", "items": { "type": "string", "pattern": "^A[0-9]+$" } },
+        "confianza": { "enum": ["Alta", "Media", "Baja"] },
+        "requiere_atencion_especial": { "type": "boolean" }
+      }
+    },
+    "T4b_borrador_validado": {
+      "description": "Salida de 'IA · Validar borrador' (guardrail). Es lo que ve el revisor humano en Slack y lo que se guarda en Notion.",
+      "type": "object",
+      "required": ["asunto", "cuerpo", "confianza", "articulos_ids", "articulos_txt", "alertas", "semaforo", "tokens_total", "modelos"],
+      "properties": {
+        "asunto": { "type": "string" },
+        "cuerpo": { "type": "string" },
+        "confianza": { "enum": ["Alta", "Media", "Baja"] },
+        "articulos_ids": { "type": "array", "items": { "type": "string", "description": "ID de página de Notion" } },
+        "articulos_txt": { "type": "string" },
+        "alertas": { "type": "array", "items": { "type": "string" } },
+        "semaforo": { "enum": ["🟢", "🟡", "🔴"] },
+        "tokens_total": { "type": "integer" },
+        "modelos": { "type": "string" }
+      }
+    },
+    "T5_notion_crear_consulta": {
+      "description": "Cuerpo de POST https://api.notion.com/v1/pages del nodo 'Notion · Crear consulta (Pendiente)'. Notion-Version 2022-06-28.",
+      "type": "object",
+      "required": ["parent", "properties"],
+      "properties": {
+        "parent": { "type": "object", "required": ["database_id"], "properties": { "database_id": { "type": "string" } } },
+        "properties": {
+          "type": "object",
+          "required": ["Asunto", "Estado", "Mensaje minimizado", "Contacto", "Recibida", "ID ejecucion"],
+          "properties": {
+            "Asunto": { "description": "title" },
+            "Estado": { "description": "select = Pendiente" },
+            "Mensaje minimizado": { "description": "rich_text" },
+            "Datos redactados": { "description": "multi_select" },
+            "Contacto": { "description": "relation → Contactos (un único ID)" },
+            "Recibida": { "description": "date" },
+            "ID ejecucion": { "description": "rich_text" }
+          }
+        }
+      }
+    },
+    "T6_slack_hitl": {
+      "description": "Slack · Publicar consulta en aprobaciones (chat.postMessage) devuelve 'ts', que se usa como thread_ts del nodo 'HITL · Aprobación humana (Slack)' (sendAndWait, aprobación doble, espera máxima Config.hitl_espera_horas). La respuesta del HITL se evalúa con data.approved === true.",
+      "type": "object",
+      "properties": {
+        "postMessage_respuesta": {
+          "type": "object",
+          "required": ["ok", "channel", "ts"],
+          "properties": { "ok": { "const": true }, "channel": { "type": "string" }, "ts": { "type": "string" } }
+        },
+        "sendAndWait_respuesta": {
+          "type": "object",
+          "properties": { "data": { "type": "object", "properties": { "approved": { "type": "boolean" } } } }
+        }
+      }
+    },
+    "T7_gmail_envio": {
+      "description": "Respuesta del nodo 'Email · Enviar respuesta al cliente (Gmail)'. threadId se guarda en Notion (Gmail Thread ID) y se informa en el hilo de Slack.",
+      "type": "object",
+      "required": ["id", "threadId"],
+      "properties": {
+        "id": { "type": "string" },
+        "threadId": { "type": "string" },
+        "labelIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "T8_registro_error": {
+      "description": "Página que crean 'Error · Registrar en Log (Notion)' (WF01) y 'Notion · Registrar error no controlado' (WF99) en la base Log de Ejecuciones.",
+      "type": "object",
+      "required": ["Evento", "Tipo", "Workflow", "Nodo", "Detalle", "ID ejecucion", "Fecha"],
+      "properties": {
+        "Evento": { "type": "string" },
+        "Tipo": { "enum": ["Error IA", "Error API", "Error envio", "Error no controlado", "Timeout HITL"] },
+        "Workflow": { "enum": ["WF01 Atencion", "WF99 Errores"] },
+        "Nodo": { "type": "string" },
+        "Detalle": { "type": "string", "maxLength": 1800 },
+        "ID ejecucion": { "type": "string" },
+        "Fecha": { "type": "string", "format": "date-time" },
+        "Consulta": { "type": "string", "description": "relation → Consultas, solo si la falla ocurrió después de crear la consulta" }
+      }
+    }
+  }
+}

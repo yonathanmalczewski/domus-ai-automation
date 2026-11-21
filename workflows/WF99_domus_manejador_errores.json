@@ -1,0 +1,211 @@
+{
+  "name": "WF99 · Domus · Manejador global de errores",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8b8d3113-09d0-4d7b-a4d7-775dc667441b",
+      "name": "Trigger · Error en cualquier flujo",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c60145f4-dec2-474c-a006-1215bebfa25c",
+              "name": "notion_db_log",
+              "value": "b7127b507ece4132a551b5021affa6bb",
+              "type": "string"
+            },
+            {
+              "id": "4178c8ee-1a17-46bf-a9ac-58c65f38389c",
+              "name": "notion_version",
+              "value": "2022-06-28",
+              "type": "string"
+            },
+            {
+              "id": "6fcb4ec8-26c3-4e71-a1c5-4ec675a23129",
+              "name": "slack_canal_alertas",
+              "value": "C0CFV0QR5N2",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e00ce832-cbe6-479a-afa2-8cc1f299e937",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        256,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Manejador global: captura cualquier falla no controlada de los flujos que lo tengan como Error Workflow.\nconst cfg = $('Config').first().json;\nconst e = $('Trigger · Error en cualquier flujo').first().json;\nconst nodo = e.execution?.lastNodeExecuted || 'desconocido';\nconst detalle = String(e.execution?.error?.message || 'Sin mensaje').slice(0, 1800);\nconst execId = String(e.execution?.id ?? 'sin-id');\nreturn [{ json: {\n  nodo, detalle, execId,\n  workflow: e.workflow?.name || 'desconocido',\n  url: e.execution?.url || '',\n  body_log: { parent: { database_id: cfg.notion_db_log }, properties: {\n    'Evento': { title: [{ text: { content: `Error no controlado en \"${nodo}\"` } }] },\n    'Tipo': { select: { name: 'Error no controlado' } },\n    'Workflow': { select: { name: 'WF99 Errores' } },\n    'Nodo': { rich_text: [{ text: { content: nodo } }] },\n    'Detalle': { rich_text: [{ text: { content: `[${e.workflow?.name || ''}] ${detalle}` } }] },\n    'ID ejecucion': { rich_text: [{ text: { content: execId } }] },\n    'Fecha': { date: { start: new Date().toISOString() } },\n  } },\n} }];\n"
+      },
+      "id": "5d1abca7-10a1-4f95-9a76-3c1251514320",
+      "name": "Error · Formatear incidente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "={{ $('Config').first().json.notion_version }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body_log) }}",
+        "options": {}
+      },
+      "id": "9fdb9283-d85b-4d80-b7a2-cc7d0930ddb4",
+      "name": "Notion · Registrar error no controlado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        224
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "notionApi": {
+          "id": "RWnXG7wJIGdPs3tH",
+          "name": "Domus · Notion"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: $('Config').first().json.slack_canal_alertas, text: '🔥 *Error no controlado* en el flujo \"' + $('Error · Formatear incidente').first().json.workflow + '\" (nodo \"' + $('Error · Formatear incidente').first().json.nodo + '\")\\n>' + $('Error · Formatear incidente').first().json.detalle.slice(0, 300) + '\\nEjecución #' + $('Error · Formatear incidente').first().json.execId + '. Revisar en n8n.', unfurl_links: false }) }}",
+        "options": {}
+      },
+      "id": "69b35df1-e009-4eb5-9f2b-7a43ccc12938",
+      "name": "Slack · Alerta error no controlado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        224
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "slackApi": {
+          "id": "AYZK5OoThXrrNXLy",
+          "name": "Domus · Slack"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## WF99 · Manejador global de errores\nSe asigna como *Error Workflow* en la configuración de WF01. Captura fallas no previstas (por ejemplo, Notion o Slack caídos), las registra en el Log de Ejecuciones y avisa en #alertas-sistema.",
+        "height": 420,
+        "width": 1120,
+        "color": 2
+      },
+      "id": "1730b825-8edf-45e5-9316-6b3aee989e88",
+      "name": "Nota · Manejador global de errores",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Trigger · Error en cualquier flujo": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Error · Formatear incidente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error · Formatear incidente": {
+      "main": [
+        [
+          {
+            "node": "Notion · Registrar error no controlado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion · Registrar error no controlado": {
+      "main": [
+        [
+          {
+            "node": "Slack · Alerta error no controlado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "America/Argentina/Buenos_Aires",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "c432b59c-4853-4d6f-ba2c-00652830d7bb",
+  "meta": {
+    "instanceId": "1f149afaaa4610ec89977daf21c95113ef306a6d49f4bef697c440f8f64e8029"
+  },
+  "nodeGroups": [],
+  "id": "45kbYI27T9Lfx81V",
+  "tags": []
+}
